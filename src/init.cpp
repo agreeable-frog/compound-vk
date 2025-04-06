@@ -6,22 +6,25 @@
 #include <format>
 
 static inline void logSeverity(
-    vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     const std::string& msg) noexcept {
     static log4cplus::Logger logger =
         log4cplus::Logger::getInstance("compound.vkdebug");
-    using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
     switch (messageSeverity) {
-        case eError:
+        case VkDebugUtilsMessageSeverityFlagBitsEXT::
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
             LOG4CPLUS_ERROR(logger, msg);
             break;
-        case eWarning:
+        case VkDebugUtilsMessageSeverityFlagBitsEXT::
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
             LOG4CPLUS_WARN(logger, msg);
             break;
-        case eInfo:
+        case VkDebugUtilsMessageSeverityFlagBitsEXT::
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
             LOG4CPLUS_INFO(logger, msg);
             break;
-        case eVerbose:
+        case VkDebugUtilsMessageSeverityFlagBitsEXT::
+            VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
             LOG4CPLUS_DEBUG(logger, msg);
             break;
         default:
@@ -30,19 +33,18 @@ static inline void logSeverity(
 }
 
 static inline VkBool32 debugCallback(
-    vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    vk::DebugUtilsMessageTypeFlagsEXT messageType,
-    const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData,
+    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
     [[maybe_unused]] void* pUserData) noexcept {
     std::string msg = "";
-    using enum vk::DebugUtilsMessageTypeFlagBitsEXT;
-    if ((messageType & eGeneral) == eGeneral) {
+    if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT) {
         msg += "GENERAL ";
     }
-    if ((messageType & eValidation) == eValidation) {
+    if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT) {
         msg += "VALIDATION ";
     }
-    if ((messageType & ePerformance) == ePerformance) {
+    if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT) {
         msg += "PERFORMANCE ";
     }
     msg += pCallbackData->pMessage;
@@ -60,8 +62,7 @@ Init& Init::get() {
     return instance;
 }
 
-Init::Init()
-    : m_context(), m_instance(0), m_debugMessenger(0) {
+Init::Init() : m_context(), m_instance(0), m_debugMessenger(0) {
     LOG4CPLUS_INFO(m_logger, "Instancing init");
     glfwInit();
     vk::ApplicationInfo applicationInfo{};
@@ -69,7 +70,7 @@ Init::Init()
     applicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
     applicationInfo.pEngineName = "compound";
     applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    applicationInfo.apiVersion = VK_API_VERSION_1_4;
+    applicationInfo.apiVersion = VK_API_VERSION_1_3;
 
     vk::InstanceCreateInfo instanceCreateInfo{};
     instanceCreateInfo.pApplicationInfo = &applicationInfo;
@@ -133,7 +134,8 @@ void Init::logInstanceProperties() const noexcept {
     }
 }
 
-bool Init::isExtensionAvailable(const std::string& extensionName) const noexcept {
+bool Init::isExtensionAvailable(
+    const std::string& extensionName) const noexcept {
     auto extensions = m_context.enumerateInstanceExtensionProperties();
     for (const auto& extension : extensions) {
         if (std::string(extension.extensionName) == extensionName) {
@@ -163,7 +165,7 @@ bool Init::isLayerAvailable(const std::string& layerName) const noexcept {
     return false;
 }
 
-void Init::setupDebugMessenger(){
+void Init::setupDebugMessenger() {
     vk::DebugUtilsMessengerCreateInfoEXT info{};
     {
         using enum vk::DebugUtilsMessageSeverityFlagBitsEXT;
@@ -173,7 +175,7 @@ void Init::setupDebugMessenger(){
         using enum vk::DebugUtilsMessageTypeFlagBitsEXT;
         info.messageType = eGeneral | eValidation | ePerformance;
     }
-    info.pfnUserCallback = debugCallback;
+    info.setPfnUserCallback(debugCallback);
     info.pUserData = nullptr;
     m_debugMessenger = m_instance.createDebugUtilsMessengerEXT(info);
 }
