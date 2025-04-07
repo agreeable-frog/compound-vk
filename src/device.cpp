@@ -3,6 +3,7 @@
 #include <log4cplus/loggingmacros.h>
 #include <map>
 #include <format>
+#include <optional>
 
 namespace compound {
 Device::Device(const Init& init) : m_physicalDevice(0), m_device(0) {
@@ -53,6 +54,11 @@ int Device::scorePhysicalDevice(
     if (properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
         score += 500;
     }
+    try {
+        getGraphicsFamilyQueue(physicalDevice);
+    } catch (std::exception& e) {
+        score = 0;
+    }
     return score;
 }
 
@@ -74,5 +80,32 @@ void Device::listQueueFamilies(
                 graphics ? "yes" : "no", transfer ? "yes" : "no",
                 compute ? "yes" : "no"));
     }
+}
+
+[[maybe_unused]] uint32_t Device::getGraphicsFamilyQueue(const vk::raii::PhysicalDevice& physicalDevice) const {
+    auto queuesProperties = physicalDevice.getQueueFamilyProperties();
+    uint32_t selectedQueueFamilyIndex;
+    int selectedQueueFamilyScore = 0;
+    for (uint32_t i = 0; i < static_cast<uint32_t>(queuesProperties.size()); i++) {
+        int score = 0;
+        auto& queueProperties = queuesProperties[i];
+        auto flags = queueProperties.queueFlags;
+        using enum vk::QueueFlagBits;
+        bool graphics = (flags & eGraphics) == eGraphics;
+        bool transfer = (flags & eTransfer) == eTransfer;
+        bool compute = (flags & eCompute) == eCompute;
+        if (graphics) score += 500;
+        if (!transfer) score += 500;
+        if (!compute) score += 500;
+        if (score > selectedQueueFamilyScore) {
+            selectedQueueFamilyIndex = i;
+            selectedQueueFamilyScore = score;
+        }
+    }
+    if (selectedQueueFamilyScore == 0) {
+        LOG4CPLUS_ERROR(m_logger, "No graphics-able family queue was found");
+        throw std::runtime_error("No graphics-able family queue was found");
+    }
+    return selectedQueueFamilyIndex;
 }
 } // namespace compound

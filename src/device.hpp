@@ -14,5 +14,8 @@ private:
 public:
     Device(const Init&);
     void listQueueFamilies(const vk::raii::PhysicalDevice&) const noexcept;
+    [[maybe_unused]] uint32_t getGraphicsFamilyQueue(const vk::raii::PhysicalDevice&) const;
+    [[maybe_unused]] uint32_t getTransferFamilyQueue(const vk::raii::PhysicalDevice&) const;
+    [[maybe_unused]] uint32_t getPresentationFamilyQueue(const vk::raii::PhysicalDevice&) const;
 };
 }
