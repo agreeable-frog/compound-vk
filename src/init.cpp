@@ -1,5 +1,6 @@
 #include "init.hpp"
 
+#define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 #include <log4cplus/logger.h>
 #include <log4cplus/loggingmacros.h>
@@ -65,6 +66,10 @@ Init& Init::get() {
 Init::Init() : m_context(), m_instance(0), m_debugMessenger(0) {
     LOG4CPLUS_INFO(m_logger, "Instancing init");
     glfwInit();
+    glfwSetErrorCallback([](int error, const char* msg) {
+        LOG4CPLUS_ERROR(log4cplus::Logger::getInstance("compound.init"),
+                        std::to_string(error) + " : " + msg);
+    });
     vk::ApplicationInfo applicationInfo{};
     applicationInfo.pApplicationName = m_appName.c_str();
     applicationInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -90,9 +95,9 @@ Init::Init() : m_context(), m_instance(0), m_debugMessenger(0) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     for (const auto& extension : extensions) {
+        LOG4CPLUS_DEBUG(m_logger, "Checking for extension support for " + std::string(extension));
         if (!isExtensionAvailable(extension)) {
-            throw std::runtime_error(
-                "Extension needed for glfw is not available.");
+            throw std::runtime_error("Extension is not available.");
         }
     }
     instanceCreateInfo.enabledExtensionCount = extensions.size();

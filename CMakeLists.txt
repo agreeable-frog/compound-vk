@@ -22,7 +22,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(IMGUI REQUIRED imgui)
 
 add_library(${PROJECT_NAME} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/init.cpp
-                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/device.cpp)
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/device.cpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/window.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan glfw log4cplus::log4cplus)
 
