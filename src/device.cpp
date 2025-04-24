@@ -4,14 +4,121 @@
 #include <map>
 #include <format>
 #include <optional>
+#include <set>
 
 namespace compound {
 Device::Device(const Init& init, const Window& window)
     : m_physicalDevice(0),
       m_device(0),
       m_graphicsQueue(0),
-      m_presentationQueue(0) {
+      m_presentationQueue(0),
+      m_swapchain(0) {
     LOG4CPLUS_INFO(m_logger, "Creating a new vulkan device");
+    selectPhysicalDevice(init, window);
+    LOG4CPLUS_INFO(
+        m_logger,
+        std::format("Selected physical device {}",
+                    std::string(m_physicalDevice.getProperties().deviceName)));
+    listQueueFamilies(m_physicalDevice);
+
+    LOG4CPLUS_INFO(m_logger, "Creating queues and device");
+    createDevice(init, window);
+
+    LOG4CPLUS_INFO(m_logger, "Creating swapchain");
+    auto availableFormats =
+        m_physicalDevice.getSurfaceFormatsKHR(*window.getSurface());
+
+    std::optional<vk::SurfaceFormatKHR> selectedFormat;
+    for (const auto& format : availableFormats) {
+        if ((format.format == vk::Format::eB8G8R8A8Srgb) &&
+            (format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)) {
+            selectedFormat = format;
+        }
+    }
+    if (!selectedFormat.has_value()) {
+        LOG4CPLUS_ERROR(m_logger, "Could not find wanted surface format");
+        throw std::runtime_error("Could not find wanted surface format");
+    }
+
+    vk::PresentModeKHR selectedPresentMode = vk::PresentModeKHR::eFifo;
+    for (const auto& presentMode :
+         m_physicalDevice.getSurfacePresentModesKHR(*window.getSurface())) {
+        if (presentMode == vk::PresentModeKHR::eMailbox) {
+            selectedPresentMode = presentMode;
+        }
+    }
+
+    auto surfaceCapabilities =
+        m_physicalDevice.getSurfaceCapabilitiesKHR(*window.getSurface());
+    vk::Extent2D extent = surfaceCapabilities.currentExtent;
+    if (surfaceCapabilities.currentExtent.width ==
+        std::numeric_limits<uint32_t>::max()) {
+        auto framebufferSize = window.getFramebufferSize();
+        extent =
+            vk::Extent2D{std::clamp(static_cast<uint32_t>(framebufferSize[0]),
+                                    surfaceCapabilities.minImageExtent.width,
+                                    surfaceCapabilities.maxImageExtent.width),
+                         std::clamp(static_cast<uint32_t>(framebufferSize[1]),
+                                    surfaceCapabilities.minImageExtent.height,
+                                    surfaceCapabilities.maxImageExtent.height)};
+    }
+
+    uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
+
+    vk::SwapchainCreateInfoKHR swapchainCreateInfo{};
+    swapchainCreateInfo.setSurface(*window.getSurface());
+    swapchainCreateInfo.minImageCount = imageCount;
+    swapchainCreateInfo.imageFormat = selectedFormat.value().format;
+    swapchainCreateInfo.imageColorSpace = selectedFormat.value().colorSpace;
+    swapchainCreateInfo.imageExtent = extent;
+    swapchainCreateInfo.imageArrayLayers = 1;
+    swapchainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
+    auto indices = {m_graphicsQueueFamilyIndex, m_presentationQueueFamilyIndex};
+    if (m_graphicsQueueFamilyIndex != m_presentationQueueFamilyIndex) {
+        swapchainCreateInfo.imageSharingMode = vk::SharingMode::eConcurrent;
+        swapchainCreateInfo.setQueueFamilyIndices(indices);
+    } else {
+        swapchainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
+    }
+    swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
+    swapchainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    swapchainCreateInfo.presentMode = selectedPresentMode;
+    swapchainCreateInfo.clipped = vk::True;
+    if (m_swapchainCreated) {
+        swapchainCreateInfo.setOldSwapchain(*m_swapchain);
+    } else {
+        swapchainCreateInfo.setOldSwapchain(nullptr);
+    }
+
+    m_swapchain = m_device.createSwapchainKHR(swapchainCreateInfo);
+}
+
+int Device::scorePhysicalDevice(const vk::raii::PhysicalDevice& physicalDevice,
+                                const Window& window) const noexcept {
+    auto properties = physicalDevice.getProperties();
+    int score = 0;
+    if (properties.apiVersion < VK_API_VERSION_1_3) {
+        return 0;
+    }
+    if (properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
+        score += 1000;
+    }
+    if (properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
+        score += 500;
+    }
+    try {
+        getGraphicsFamilyQueue(physicalDevice);
+        getPresentationFamilyQueue(physicalDevice, window);
+    } catch (std::exception& e) {
+        score = 0;
+    }
+    if (!checkDeviceExtensionSupport(physicalDevice)) score = 0;
+    if (!checkDeviceSwapchainSupport(physicalDevice, window.getSurface()))
+        score = 0;
+    return score;
+}
+
+void Device::selectPhysicalDevice(const Init& init, const Window& window) {
     std::vector<vk::raii::PhysicalDevice> availablePhysicalDevices =
         init.getVkInstance().enumeratePhysicalDevices();
     if (availablePhysicalDevices.size() == 0) {
@@ -36,27 +143,23 @@ Device::Device(const Init& init, const Window& window)
         LOG4CPLUS_ERROR(m_logger, "No physical device met the requirements");
         throw std::runtime_error("No physical device met the requirements");
     }
-    vk::raii::PhysicalDevice m_physicalDevice = selectedPhysicalDevice;
-    availablePhysicalDevices.clear();
-    LOG4CPLUS_INFO(
-        m_logger,
-        std::format("Selected physical device {}",
-                    std::string(m_physicalDevice.getProperties().deviceName)));
-    listQueueFamilies(m_physicalDevice);
+    m_physicalDevice = selectedPhysicalDevice;
+}
 
+void Device::createDevice(const Init& init, const Window& window) {
     vk::DeviceQueueCreateInfo graphicsQueueCreateInfo{};
-    uint32_t graphicsQueueFamilyIndex =
+    m_graphicsQueueFamilyIndex =
         getGraphicsFamilyQueue(m_physicalDevice);
-    graphicsQueueCreateInfo.setQueueFamilyIndex(graphicsQueueFamilyIndex);
+    graphicsQueueCreateInfo.setQueueFamilyIndex(m_graphicsQueueFamilyIndex);
     graphicsQueueCreateInfo.queueCount = 1;
     float queuePriority = 1.0f;
     graphicsQueueCreateInfo.setQueuePriorities(queuePriority);
 
     vk::DeviceQueueCreateInfo presentationQueueCreateInfo{};
-    uint32_t presentationQueueFamilyIndex =
+    m_presentationQueueFamilyIndex =
         getPresentationFamilyQueue(m_physicalDevice, window);
     presentationQueueCreateInfo.setQueueFamilyIndex(
-        presentationQueueFamilyIndex);
+        m_presentationQueueFamilyIndex);
     presentationQueueCreateInfo.queueCount = 1;
     presentationQueueCreateInfo.setQueuePriorities(queuePriority);
 
@@ -64,31 +167,35 @@ Device::Device(const Init& init, const Window& window)
     vk::DeviceCreateInfo deviceCreateInfo;
     deviceCreateInfo.setQueueCreateInfos(graphicsQueueCreateInfo);
     deviceCreateInfo.setPEnabledFeatures(&physicalDeviceFeatures);
+    deviceCreateInfo.setPEnabledExtensionNames(m_extensions);
+    deviceCreateInfo.setPEnabledLayerNames(init.getLayers());
     m_device = m_physicalDevice.createDevice(deviceCreateInfo);
-    m_graphicsQueue = m_device.getQueue(graphicsQueueFamilyIndex, 0);
-    m_presentationQueue = m_device.getQueue(presentationQueueFamilyIndex, 0);
+    m_graphicsQueue = m_device.getQueue(m_graphicsQueueFamilyIndex, 0);
+    m_presentationQueue = m_device.getQueue(m_presentationQueueFamilyIndex, 0);
 }
 
-int Device::scorePhysicalDevice(const vk::raii::PhysicalDevice& physicalDevice,
-                                const Window& window) const noexcept {
-    auto properties = physicalDevice.getProperties();
-    int score = 0;
-    if (properties.apiVersion < VK_API_VERSION_1_3) {
-        return 0;
+bool Device::checkDeviceExtensionSupport(
+    const vk::raii::PhysicalDevice& physicalDevice) const noexcept {
+    LOG4CPLUS_DEBUG(m_logger, "Checking device supports needed extensions");
+    std::set<std::string> requiredExtensions(m_extensions.begin(),
+                                             m_extensions.end());
+    for (const auto& availableExtension :
+         physicalDevice.enumerateDeviceExtensionProperties()) {
+        requiredExtensions.erase(availableExtension.extensionName);
     }
-    if (properties.deviceType == vk::PhysicalDeviceType::eDiscreteGpu) {
-        score += 1000;
-    }
-    if (properties.deviceType == vk::PhysicalDeviceType::eIntegratedGpu) {
-        score += 500;
-    }
-    try {
-        getGraphicsFamilyQueue(physicalDevice);
-        getPresentationFamilyQueue(physicalDevice, window);
-    } catch (std::exception& e) {
-        score = 0;
-    }
-    return score;
+    return requiredExtensions.empty();
+}
+
+bool Device::checkDeviceSwapchainSupport(
+    const vk::raii::PhysicalDevice& physicalDevice,
+    const vk::raii::SurfaceKHR& surface) const noexcept {
+    LOG4CPLUS_DEBUG(m_logger, "Checking device supports swapchain");
+    auto physicalDeviceSurfaceFormats =
+        physicalDevice.getSurfaceFormatsKHR(*surface);
+    auto physicalDeviceSurfacePresentModes =
+        physicalDevice.getSurfacePresentModesKHR(*surface);
+    return physicalDeviceSurfaceFormats.size() > 0 &&
+           physicalDeviceSurfacePresentModes.size();
 }
 
 void Device::listQueueFamilies(
@@ -113,6 +220,7 @@ void Device::listQueueFamilies(
 
 [[maybe_unused]] uint32_t Device::getGraphicsFamilyQueue(
     const vk::raii::PhysicalDevice& physicalDevice) const {
+    LOG4CPLUS_DEBUG(m_logger, "Getting a queue family for graphics");
     auto queuesProperties = physicalDevice.getQueueFamilyProperties();
     uint32_t selectedQueueFamilyIndex;
     int selectedQueueFamilyScore = 0;
@@ -143,7 +251,7 @@ void Device::listQueueFamilies(
 [[maybe_unused]] uint32_t Device::getPresentationFamilyQueue(
     const vk::raii::PhysicalDevice& physicalDevice,
     const Window& window) const {
-    LOG4CPLUS_INFO(m_logger, "Querying presentation queue family");
+    LOG4CPLUS_DEBUG(m_logger, "Getting a queue family for presentation");
     auto queuesProperties = physicalDevice.getQueueFamilyProperties();
     uint32_t selectedQueueFamilyIndex;
     int selectedQueueFamilyScore = 0;
@@ -163,8 +271,6 @@ void Device::listQueueFamilies(
             selectedQueueFamilyIndex = i;
             selectedQueueFamilyScore = score;
         }
-        LOG4CPLUS_DEBUG(m_logger, "getSurfaceSupportKHR");
-
         if (physicalDevice.getSurfaceSupportKHR(i, *window.getSurface()) ==
             VK_FALSE) {
             score = 0;

@@ -18,6 +18,7 @@ private:
 #else
     inline static std::vector<const char*> m_validationLayers {""};
 #endif
+    std::vector<const char*> m_extensions;
     Init();
     void logInstanceProperties() const noexcept;
     bool isExtensionAvailable(const std::string&) const noexcept;
@@ -27,6 +28,8 @@ public:
     static void setAppName(const std::string&) noexcept;
     static Init& get();
     const vk::raii::Instance& getVkInstance() const noexcept;
+    const std::vector<const char*>& getExtensions() const noexcept;
+    const std::vector<const char*>& getLayers() const noexcept;
     ~Init();
 };
 } // namespace compound

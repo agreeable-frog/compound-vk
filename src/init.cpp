@@ -84,8 +84,7 @@ Init::Init() : m_context(), m_instance(0), m_debugMessenger(0) {
             throw std::runtime_error("Validation layer is not available.");
         }
     }
-    instanceCreateInfo.enabledLayerCount = m_validationLayers.size();
-    instanceCreateInfo.ppEnabledLayerNames = m_validationLayers.data();
+    instanceCreateInfo.setPEnabledLayerNames(m_validationLayers);
     uint32_t glfwExtensionCount = 0;
     auto glfwExtensions =
         glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -95,13 +94,14 @@ Init::Init() : m_context(), m_instance(0), m_debugMessenger(0) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     for (const auto& extension : extensions) {
-        LOG4CPLUS_DEBUG(m_logger, "Checking for extension support for " + std::string(extension));
+        LOG4CPLUS_DEBUG(m_logger, "Checking for extension support for " +
+                                      std::string(extension));
         if (!isExtensionAvailable(extension)) {
             throw std::runtime_error("Extension is not available.");
         }
     }
-    instanceCreateInfo.enabledExtensionCount = extensions.size();
-    instanceCreateInfo.ppEnabledExtensionNames = extensions.data();
+    m_extensions = extensions;
+    instanceCreateInfo.setPEnabledExtensionNames(extensions);
 
     LOG4CPLUS_INFO(m_logger, "Creating vulkan instance");
     try {
@@ -191,5 +191,13 @@ Init::~Init() {
 
 const vk::raii::Instance& Init::getVkInstance() const noexcept {
     return m_instance;
+}
+
+const std::vector<const char*>& Init::getExtensions() const noexcept {
+    return m_extensions;
+}
+
+const std::vector<const char*>& Init::getLayers() const noexcept {
+    return m_validationLayers;
 }
 } // namespace compound
