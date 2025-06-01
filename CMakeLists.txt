@@ -23,9 +23,13 @@ pkg_check_modules(IMGUI REQUIRED imgui)
 
 add_library(${PROJECT_NAME} SHARED ${CMAKE_CURRENT_SOURCE_DIR}/src/init.cpp
                                    ${CMAKE_CURRENT_SOURCE_DIR}/src/device.cpp
-                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/window.cpp)
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/window.cpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/swapchain.cpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/pipeline.cpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/framebuffer.cpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/commandstructs.cpp
+                                   ${CMAKE_CURRENT_SOURCE_DIR}/src/renderloop.cpp)
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan glfw log4cplus::log4cplus)
 
-add_executable(${PROJECT_NAME}-test ${CMAKE_CURRENT_SOURCE_DIR}/test/main.cpp)
-target_link_libraries(${PROJECT_NAME}-test PUBLIC ${PROJECT_NAME})
+add_subdirectory(test)

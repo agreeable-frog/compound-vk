@@ -11,8 +11,7 @@ Device::Device(const Init& init, const Window& window)
     : m_physicalDevice(0),
       m_device(0),
       m_graphicsQueue(0),
-      m_presentationQueue(0),
-      m_swapchain(0) {
+      m_presentationQueue(0) {
     LOG4CPLUS_INFO(m_logger, "Creating a new vulkan device");
     selectPhysicalDevice(init, window);
     LOG4CPLUS_INFO(
@@ -24,73 +23,6 @@ Device::Device(const Init& init, const Window& window)
     LOG4CPLUS_INFO(m_logger, "Creating queues and device");
     createDevice(init, window);
 
-    LOG4CPLUS_INFO(m_logger, "Creating swapchain");
-    auto availableFormats =
-        m_physicalDevice.getSurfaceFormatsKHR(*window.getSurface());
-
-    std::optional<vk::SurfaceFormatKHR> selectedFormat;
-    for (const auto& format : availableFormats) {
-        if ((format.format == vk::Format::eB8G8R8A8Srgb) &&
-            (format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear)) {
-            selectedFormat = format;
-        }
-    }
-    if (!selectedFormat.has_value()) {
-        LOG4CPLUS_ERROR(m_logger, "Could not find wanted surface format");
-        throw std::runtime_error("Could not find wanted surface format");
-    }
-
-    vk::PresentModeKHR selectedPresentMode = vk::PresentModeKHR::eFifo;
-    for (const auto& presentMode :
-         m_physicalDevice.getSurfacePresentModesKHR(*window.getSurface())) {
-        if (presentMode == vk::PresentModeKHR::eMailbox) {
-            selectedPresentMode = presentMode;
-        }
-    }
-
-    auto surfaceCapabilities =
-        m_physicalDevice.getSurfaceCapabilitiesKHR(*window.getSurface());
-    vk::Extent2D extent = surfaceCapabilities.currentExtent;
-    if (surfaceCapabilities.currentExtent.width ==
-        std::numeric_limits<uint32_t>::max()) {
-        auto framebufferSize = window.getFramebufferSize();
-        extent =
-            vk::Extent2D{std::clamp(static_cast<uint32_t>(framebufferSize[0]),
-                                    surfaceCapabilities.minImageExtent.width,
-                                    surfaceCapabilities.maxImageExtent.width),
-                         std::clamp(static_cast<uint32_t>(framebufferSize[1]),
-                                    surfaceCapabilities.minImageExtent.height,
-                                    surfaceCapabilities.maxImageExtent.height)};
-    }
-
-    uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
-
-    vk::SwapchainCreateInfoKHR swapchainCreateInfo{};
-    swapchainCreateInfo.setSurface(*window.getSurface());
-    swapchainCreateInfo.minImageCount = imageCount;
-    swapchainCreateInfo.imageFormat = selectedFormat.value().format;
-    swapchainCreateInfo.imageColorSpace = selectedFormat.value().colorSpace;
-    swapchainCreateInfo.imageExtent = extent;
-    swapchainCreateInfo.imageArrayLayers = 1;
-    swapchainCreateInfo.imageUsage = vk::ImageUsageFlagBits::eColorAttachment;
-    auto indices = {m_graphicsQueueFamilyIndex, m_presentationQueueFamilyIndex};
-    if (m_graphicsQueueFamilyIndex != m_presentationQueueFamilyIndex) {
-        swapchainCreateInfo.imageSharingMode = vk::SharingMode::eConcurrent;
-        swapchainCreateInfo.setQueueFamilyIndices(indices);
-    } else {
-        swapchainCreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
-    }
-    swapchainCreateInfo.preTransform = surfaceCapabilities.currentTransform;
-    swapchainCreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
-    swapchainCreateInfo.presentMode = selectedPresentMode;
-    swapchainCreateInfo.clipped = vk::True;
-    if (m_swapchainCreated) {
-        swapchainCreateInfo.setOldSwapchain(*m_swapchain);
-    } else {
-        swapchainCreateInfo.setOldSwapchain(nullptr);
-    }
-
-    m_swapchain = m_device.createSwapchainKHR(swapchainCreateInfo);
 }
 
 int Device::scorePhysicalDevice(const vk::raii::PhysicalDevice& physicalDevice,
@@ -107,8 +39,8 @@ int Device::scorePhysicalDevice(const vk::raii::PhysicalDevice& physicalDevice,
         score += 500;
     }
     try {
-        getGraphicsFamilyQueue(physicalDevice);
-        getPresentationFamilyQueue(physicalDevice, window);
+        queryGraphicsFamilyQueueIndex(physicalDevice);
+        queryPresentationFamilyQueueIndex(physicalDevice, window);
     } catch (std::exception& e) {
         score = 0;
     }
@@ -149,7 +81,7 @@ void Device::selectPhysicalDevice(const Init& init, const Window& window) {
 void Device::createDevice(const Init& init, const Window& window) {
     vk::DeviceQueueCreateInfo graphicsQueueCreateInfo{};
     m_graphicsQueueFamilyIndex =
-        getGraphicsFamilyQueue(m_physicalDevice);
+        queryGraphicsFamilyQueueIndex(m_physicalDevice);
     graphicsQueueCreateInfo.setQueueFamilyIndex(m_graphicsQueueFamilyIndex);
     graphicsQueueCreateInfo.queueCount = 1;
     float queuePriority = 1.0f;
@@ -157,7 +89,7 @@ void Device::createDevice(const Init& init, const Window& window) {
 
     vk::DeviceQueueCreateInfo presentationQueueCreateInfo{};
     m_presentationQueueFamilyIndex =
-        getPresentationFamilyQueue(m_physicalDevice, window);
+        queryPresentationFamilyQueueIndex(m_physicalDevice, window);
     presentationQueueCreateInfo.setQueueFamilyIndex(
         m_presentationQueueFamilyIndex);
     presentationQueueCreateInfo.queueCount = 1;
@@ -218,7 +150,7 @@ void Device::listQueueFamilies(
     }
 }
 
-[[maybe_unused]] uint32_t Device::getGraphicsFamilyQueue(
+[[maybe_unused]] uint32_t Device::queryGraphicsFamilyQueueIndex(
     const vk::raii::PhysicalDevice& physicalDevice) const {
     LOG4CPLUS_DEBUG(m_logger, "Getting a queue family for graphics");
     auto queuesProperties = physicalDevice.getQueueFamilyProperties();
@@ -248,7 +180,7 @@ void Device::listQueueFamilies(
     return selectedQueueFamilyIndex;
 }
 
-[[maybe_unused]] uint32_t Device::getPresentationFamilyQueue(
+[[maybe_unused]] uint32_t Device::queryPresentationFamilyQueueIndex(
     const vk::raii::PhysicalDevice& physicalDevice,
     const Window& window) const {
     LOG4CPLUS_DEBUG(m_logger, "Getting a queue family for presentation");
@@ -281,5 +213,29 @@ void Device::listQueueFamilies(
         throw std::runtime_error("No graphics-able family queue was found");
     }
     return selectedQueueFamilyIndex;
+}
+
+const vk::raii::Device& Device::getDevice() const noexcept {
+    return m_device;
+}
+
+const vk::raii::PhysicalDevice& Device::getPhysicalDevice() const noexcept {
+    return m_physicalDevice;
+}
+
+uint32_t Device::getGraphicsFamilyQueueIndex() const noexcept {
+    return m_graphicsQueueFamilyIndex;
+}
+
+uint32_t Device::getPresentationFamilyQueueIndex() const noexcept {
+    return m_presentationQueueFamilyIndex;
+}
+
+const vk::raii::Queue& Device::getGraphicsQueue() const noexcept {
+    return m_graphicsQueue;
+}
+
+const vk::raii::Queue& Device::getPresentQueue() const noexcept {
+    return m_presentationQueue;
 }
 } // namespace compound
