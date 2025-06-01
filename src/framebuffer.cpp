@@ -15,7 +15,7 @@ std::vector<Framebuffer> Framebuffer::create(const Device& device,
     std::vector<Framebuffer> framebuffers;
     const auto& imageViews = swapchain.getImageViews();
     vk::FramebufferCreateInfo createInfo{};
-    createInfo.setRenderPass(pipeline.getRenderpass());
+    createInfo.setRenderPass(*pipeline.getRenderpass());
     const auto& extent = swapchain.getExtent();
     createInfo.width = extent.width;
     createInfo.height = extent.height;

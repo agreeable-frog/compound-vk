@@ -17,7 +17,7 @@ CommandBuffer::CommandBuffer(const Device& device,
                              const CommandPool& commandPool)
     : m_buffer(0) {
     vk::CommandBufferAllocateInfo allocInfo{};
-    allocInfo.setCommandPool(commandPool.getCommandPool());
+    allocInfo.setCommandPool(*commandPool.getCommandPool());
     allocInfo.setCommandBufferCount(1);
     allocInfo.setLevel(vk::CommandBufferLevel::ePrimary);
     m_buffer =
@@ -29,14 +29,14 @@ void CommandBuffer::record(const Swapchain& swapchain, const Pipeline& pipeline,
     vk::CommandBufferBeginInfo beginInfo{};
     m_buffer.begin(beginInfo);
     vk::RenderPassBeginInfo renderpassBeginInfo{};
-    renderpassBeginInfo.setRenderPass(pipeline.getRenderpass());
-    renderpassBeginInfo.setFramebuffer(framebuffer.getFramebuffer());
+    renderpassBeginInfo.setRenderPass(*pipeline.getRenderpass());
+    renderpassBeginInfo.setFramebuffer(*framebuffer.getFramebuffer());
     renderpassBeginInfo.setRenderArea(vk::Rect2D({0, 0}, swapchain.getExtent()));
     auto clearValue = vk::ClearValue({0.0f, 0.0f, 0.0f, 1.0f});
     renderpassBeginInfo.setClearValues(clearValue);
     m_buffer.beginRenderPass(renderpassBeginInfo, vk::SubpassContents::eInline);
 
-    m_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline.getPipeline());
+    m_buffer.bindPipeline(vk::PipelineBindPoint::eGraphics, *pipeline.getPipeline());
 
     vk::Viewport viewport{};
     viewport.x = 0.0f;

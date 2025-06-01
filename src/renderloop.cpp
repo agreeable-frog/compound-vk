@@ -27,7 +27,7 @@ void Renderloop::drawFrame(const CommandBuffer& a_commandBuffer,
     m_device.getDevice().resetFences(*m_inFlight);
     uint32_t imageIndex;
     auto result = a_swapchain.getSwapchain().acquireNextImage(
-        std::numeric_limits<uint64_t>::max(), m_imageAvailable, nullptr);
+        std::numeric_limits<uint64_t>::max(), *m_imageAvailable, nullptr);
     if (result.first == vk::Result::eSuccess) {
         imageIndex = result.second;
     } else {
@@ -43,7 +43,7 @@ void Renderloop::drawFrame(const CommandBuffer& a_commandBuffer,
     submitInfo.setWaitDstStageMask(waitStages);
     submitInfo.setCommandBuffers(*a_commandBuffer.getBuffer());
     submitInfo.setSignalSemaphores(*m_renderFinished[imageIndex]);
-    m_device.getGraphicsQueue().submit(submitInfo, m_inFlight);
+    m_device.getGraphicsQueue().submit(submitInfo, *m_inFlight);
 
     vk::PresentInfoKHR presentInfo{};
     presentInfo.setWaitSemaphores(*m_renderFinished[imageIndex]);

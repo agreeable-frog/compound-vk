@@ -44,7 +44,7 @@ Pipeline::Pipeline(const Device& device, const std::string& vertShaderPath,
 
     vk::PipelineVertexInputStateCreateInfo vertexInputStateCreateInfo{};
 
-    vk::PipelineVertexInputDivisorStateCreateInfo
+    vk::PipelineVertexInputDivisorStateCreateInfoKHR
         vertexInputDivisorStateCreateInfo{};
 
     vk::PipelineInputAssemblyStateCreateInfo
@@ -96,8 +96,8 @@ Pipeline::Pipeline(const Device& device, const std::string& vertShaderPath,
     colorBlendStateCreateInfo.setAttachments(colorBlendAttachment);
 
     vk::PipelineLayoutCreateInfo pipelineLayoutCreateInfo{};
-    pipelineLayoutCreateInfo.setSetLayouts(0);
-    pipelineLayoutCreateInfo.setPushConstantRanges(0);
+    // pipelineLayoutCreateInfo.setSetLayouts(0);
+    // pipelineLayoutCreateInfo.setPushConstantRanges(0);
 
     m_pipelineLayout =
         device.getDevice().createPipelineLayout(pipelineLayoutCreateInfo);
