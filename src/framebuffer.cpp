@@ -6,24 +6,22 @@ Framebuffer::Framebuffer(vk::raii::Framebuffer&& framebuffer)
     : m_framebuffer(std::move(framebuffer)) {
     LOG4CPLUS_DEBUG(m_logger, "Creating framebuffer");
 }
-std::vector<Framebuffer> Framebuffer::create(const Device& device,
-                                             const Swapchain& swapchain,
-                                             const Pipeline& pipeline) {
+std::vector<Framebuffer> Framebuffer::create(
+    const Device& device, const std::vector<vk::raii::ImageView>& imageViews,
+    const vk::Extent2D& extent, const vk::raii::RenderPass& renderpass) {
     LOG4CPLUS_INFO(log4cplus::Logger::getInstance("compound.framebuffer"),
                    "Creating framebuffers from swapchain's imageviews and "
                    "pipeline's renderpass");
     std::vector<Framebuffer> framebuffers;
-    const auto& imageViews = swapchain.getImageViews();
     vk::FramebufferCreateInfo createInfo{};
-    createInfo.setRenderPass(*pipeline.getRenderpass());
-    const auto& extent = swapchain.getExtent();
+    createInfo.setRenderPass(*renderpass);
     createInfo.width = extent.width;
     createInfo.height = extent.height;
     createInfo.setLayers(1);
     for (const auto& imageView : imageViews) {
         createInfo.setAttachments(*imageView);
         framebuffers.push_back(
-            Framebuffer(device.getDevice().createFramebuffer(createInfo)));
+            std::move(Framebuffer(device.getDevice().createFramebuffer(createInfo))));
     }
     return framebuffers;
 }

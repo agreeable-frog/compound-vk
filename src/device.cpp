@@ -7,13 +7,13 @@
 #include <set>
 
 namespace compound {
-Device::Device(const Init& init, const Window& window)
+Device::Device(const Init& init, const vk::raii::SurfaceKHR& surface)
     : m_physicalDevice(0),
       m_device(0),
       m_graphicsQueue(0),
       m_presentationQueue(0) {
     LOG4CPLUS_INFO(m_logger, "Creating a new vulkan device");
-    selectPhysicalDevice(init, window);
+    selectPhysicalDevice(init, surface);
     LOG4CPLUS_INFO(
         m_logger,
         std::format("Selected physical device {}",
@@ -21,12 +21,12 @@ Device::Device(const Init& init, const Window& window)
     listQueueFamilies(m_physicalDevice);
 
     LOG4CPLUS_INFO(m_logger, "Creating queues and device");
-    createDevice(init, window);
+    createDevice(init, surface);
 
 }
 
 int Device::scorePhysicalDevice(const vk::raii::PhysicalDevice& physicalDevice,
-                                const Window& window) const noexcept {
+                                const vk::raii::SurfaceKHR& surface) const noexcept {
     auto properties = physicalDevice.getProperties();
     int score = 0;
     if (properties.apiVersion < VK_API_VERSION_1_3) {
@@ -40,17 +40,17 @@ int Device::scorePhysicalDevice(const vk::raii::PhysicalDevice& physicalDevice,
     }
     try {
         queryGraphicsFamilyQueueIndex(physicalDevice);
-        queryPresentationFamilyQueueIndex(physicalDevice, window);
+        queryPresentationFamilyQueueIndex(physicalDevice, surface);
     } catch (std::exception& e) {
         score = 0;
     }
     if (!checkDeviceExtensionSupport(physicalDevice)) score = 0;
-    if (!checkDeviceSwapchainSupport(physicalDevice, window.getSurface()))
+    if (!checkDeviceSwapchainSupport(physicalDevice, surface))
         score = 0;
     return score;
 }
 
-void Device::selectPhysicalDevice(const Init& init, const Window& window) {
+void Device::selectPhysicalDevice(const Init& init, const vk::raii::SurfaceKHR& surface) {
     std::vector<vk::raii::PhysicalDevice> availablePhysicalDevices =
         init.getVkInstance().enumeratePhysicalDevices();
     if (availablePhysicalDevices.size() == 0) {
@@ -64,7 +64,7 @@ void Device::selectPhysicalDevice(const Init& init, const Window& window) {
     vk::raii::PhysicalDevice& selectedPhysicalDevice =
         availablePhysicalDevices[0];
     for (auto& physicalDevice : availablePhysicalDevices) {
-        int score = scorePhysicalDevice(physicalDevice, window);
+        int score = scorePhysicalDevice(physicalDevice, surface);
         if (score < topScore) {
             continue;
         }
@@ -78,7 +78,7 @@ void Device::selectPhysicalDevice(const Init& init, const Window& window) {
     m_physicalDevice = selectedPhysicalDevice;
 }
 
-void Device::createDevice(const Init& init, const Window& window) {
+void Device::createDevice(const Init& init, const vk::raii::SurfaceKHR& surface) {
     vk::DeviceQueueCreateInfo graphicsQueueCreateInfo{};
     m_graphicsQueueFamilyIndex =
         queryGraphicsFamilyQueueIndex(m_physicalDevice);
@@ -89,7 +89,7 @@ void Device::createDevice(const Init& init, const Window& window) {
 
     vk::DeviceQueueCreateInfo presentationQueueCreateInfo{};
     m_presentationQueueFamilyIndex =
-        queryPresentationFamilyQueueIndex(m_physicalDevice, window);
+        queryPresentationFamilyQueueIndex(m_physicalDevice, surface);
     presentationQueueCreateInfo.setQueueFamilyIndex(
         m_presentationQueueFamilyIndex);
     presentationQueueCreateInfo.queueCount = 1;
@@ -182,7 +182,7 @@ void Device::listQueueFamilies(
 
 [[maybe_unused]] uint32_t Device::queryPresentationFamilyQueueIndex(
     const vk::raii::PhysicalDevice& physicalDevice,
-    const Window& window) const {
+    const vk::raii::SurfaceKHR& surface) const {
     LOG4CPLUS_DEBUG(m_logger, "Getting a queue family for presentation");
     auto queuesProperties = physicalDevice.getQueueFamilyProperties();
     uint32_t selectedQueueFamilyIndex;
@@ -203,7 +203,7 @@ void Device::listQueueFamilies(
             selectedQueueFamilyIndex = i;
             selectedQueueFamilyScore = score;
         }
-        if (physicalDevice.getSurfaceSupportKHR(i, *window.getSurface()) ==
+        if (physicalDevice.getSurfaceSupportKHR(i, *surface) ==
             VK_FALSE) {
             score = 0;
         }

@@ -14,16 +14,23 @@ int main() {
     compound::Init::setAppName("compound-test");
     const compound::Init& init = compound::Init::get();
     compound::Window window(init, 800, 450, "test");
-    compound::Device device(init, window);
+    compound::Device device(init, window.getSurface());
     compound::Swapchain swapchain(device, window);
-    compound::Pipeline pipeline(device, std::string(TEST_DIR) + "shaders/basic.vert.spv", std::string(TEST_DIR) + "shaders/basic.frag.spv", swapchain.getFormat());
-    auto framebuffers = compound::Framebuffer::create(device, swapchain, pipeline);
-    compound::CommandPool graphicsCommandPool(device, device.getGraphicsFamilyQueueIndex());
+    compound::Pipeline pipeline(
+        device, std::string(TEST_DIR) + "shaders/basic.vert.spv",
+        std::string(TEST_DIR) + "shaders/basic.frag.spv",
+        swapchain.getFormat());
+    auto framebuffers = compound::Framebuffer::create(
+        device, swapchain.getImageViews(), swapchain.getExtent(),
+        pipeline.getRenderpass());
+    compound::CommandPool graphicsCommandPool(
+        device, device.getGraphicsFamilyQueueIndex());
     compound::CommandBuffer graphicsCommandBuffer(device, graphicsCommandPool);
     compound::Renderloop renderloop(device, framebuffers);
-    while(!glfwWindowShouldClose(window.getHandle())) {
+    while (!glfwWindowShouldClose(window.getHandle())) {
         glfwPollEvents();
-        renderloop.drawFrame(graphicsCommandBuffer, swapchain, pipeline);
+        renderloop.drawFrame(device, framebuffers, graphicsCommandBuffer,
+                             swapchain, pipeline);
     }
     device.getDevice().waitIdle();
     return 0;

@@ -3,7 +3,6 @@
 #include <vulkan/vulkan_raii.hpp>
 #include "init.hpp"
 #include <log4cplus/logger.h>
-#include "window.hpp"
 #include <vector>
 
 namespace compound {
@@ -18,17 +17,17 @@ private:
     uint32_t m_presentationQueueFamilyIndex = 0;
     uint32_t m_presentationQueueCount = 0;
     vk::raii::Queue m_presentationQueue;
-    int scorePhysicalDevice(const vk::raii::PhysicalDevice&, const Window&) const noexcept;
-    void selectPhysicalDevice(const Init& init, const Window& window);
-    void createDevice(const Init& init, const Window& window);
+    int scorePhysicalDevice(const vk::raii::PhysicalDevice&, const vk::raii::SurfaceKHR&) const noexcept;
+    void selectPhysicalDevice(const Init& init, const vk::raii::SurfaceKHR& surface);
+    void createDevice(const Init& init, const vk::raii::SurfaceKHR& surface);
     std::vector<const char*> m_extensions = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     bool checkDeviceExtensionSupport(const vk::raii::PhysicalDevice&) const noexcept;
     bool checkDeviceSwapchainSupport(const vk::raii::PhysicalDevice&, const vk::raii::SurfaceKHR&) const noexcept;
 public:
-    Device(const Init&, const Window&);
+    Device(const Init&, const vk::raii::SurfaceKHR&);
     void listQueueFamilies(const vk::raii::PhysicalDevice&) const noexcept;
     [[maybe_unused]] uint32_t queryGraphicsFamilyQueueIndex(const vk::raii::PhysicalDevice&) const;
-    [[maybe_unused]] uint32_t queryPresentationFamilyQueueIndex(const vk::raii::PhysicalDevice&, const Window&) const;
+    [[maybe_unused]] uint32_t queryPresentationFamilyQueueIndex(const vk::raii::PhysicalDevice&, const vk::raii::SurfaceKHR&) const;
     [[maybe_unused]] uint32_t queryTransferFamilyQueueIndex(const vk::raii::PhysicalDevice&) const;
     const vk::raii::PhysicalDevice& getPhysicalDevice() const noexcept;
     const vk::raii::Device& getDevice() const noexcept;
